@@ -78,9 +78,7 @@ project-tomatoTimer/
 ├── tomato_timer.pyw     # 主程序，单文件运行
 ├── stats.json           # 本地自动生成，记录每日番茄完成统计
 ├── README.md            # 项目说明
-├── CHANGELOG.md         # 版本变更日志
-├── VERSION              # 当前版本号
-├── LICENSE.md           # 许可证说明
+├── LICENSE.md           # MIT 开源许可证
 └── .gitignore           # Git 忽略规则
 ```
 
