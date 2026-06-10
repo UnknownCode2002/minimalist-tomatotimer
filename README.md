@@ -84,53 +84,6 @@ project-tomatoTimer/
 └── .gitignore           # Git 忽略规则
 ```
 
-## 版本管理
-
-本项目已准备适合上传 GitHub 的版本管理基础文件：
-
-- `VERSION`：记录当前发布版本，当前为 `1.0.1`。
-- `CHANGELOG.md`：记录每个版本的更新内容。
-- `.gitignore`：忽略 Python 缓存、虚拟环境、IDE 文件和 `stats.json`。
-- `LICENSE.md`：MIT 开源许可证。
-
-### 上传到 GitHub
-
-在 GitHub 创建一个空仓库后，在项目目录执行：
-
-```bash
-git init
-git add README.md CHANGELOG.md VERSION LICENSE.md .gitignore tomato_timer.pyw
-git commit -m "chore: prepare github release"
-git branch -M main
-git remote add origin git@github.com:YOUR_USERNAME/project-tomatoTimer.git
-git push -u origin main
-```
-
-> 注意：`stats.json` 已被 `.gitignore` 忽略，不会被提交或上传。
-
-### 发布新版本
-
-后续如需发布新版本，可按以下流程：
-
-```bash
-# 1. 修改 VERSION 文件，例如改为 1.1.0
-# 2. 更新 CHANGELOG.md 的 Unreleased 内容
-# 3. 提交代码
-git add VERSION CHANGELOG.md
-git commit -m "chore: release v1.1.0"
-
-# 4. 打 Git 标签
-git tag -a v1.1.0 -m "Release v1.1.0"
-git push origin v1.1.0
-```
-
-GitHub Release 标题可使用：
-
-```text
-v1.1.0
-```
-
-发布说明可从 `CHANGELOG.md` 中复制对应版本内容。
 
 ## 隐私与数据
 
