@@ -16,6 +16,10 @@ stats.json
 *.log
 .env
 
+# 版本文件（本地保留，不上传）
+CHANGELOG.md
+VERSION
+
 # CodeBuddy / IDE 本地状态
 .codebuddy/
 .vscode/
