@@ -4,7 +4,7 @@
 
 > 当前版本：`1.0.1`  
 > 项目文件：`tomato_timer.pyw`  
-> 本地统计数据：`stats.json`（默认不会上传到 GitHub）
+> 本地统计数据：`stats.json`
 
 ## 功能特点
 
@@ -154,9 +154,6 @@ python tomato_timer.pyw
 
 可以。打开 `tomato_timer.pyw`，修改 `STATE_CONFIG` 中各阶段的 `duration` 值即可。时间单位为秒，例如 25 分钟为 `25 * 60`。
 
-### 可以上传到 GitHub 吗？
-
-可以。当前项目已包含 README、版本文件、变更日志和 `.gitignore`，适合直接初始化为 Git 仓库并上传。上传前请确认 `stats.json` 没有被手动强制提交。
 
 ## 后续可优化方向
 
