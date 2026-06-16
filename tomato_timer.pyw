@@ -55,7 +55,9 @@ STATE_CONFIG = {
 # ==================== 统计管理 ====================
 
 class StatsManager:
-    """管理每日番茄完成统计"""
+    """管理每日番茄完成统计（含坏番茄）"""
+
+    BAD_PREFIX = "_bad_"
 
     def __init__(self, filepath: str = "stats.json"):
         self.filepath = filepath
@@ -79,27 +81,51 @@ class StatsManager:
         self.data[today] = self.data.get(today, 0) + 1
         self._save()
 
+    def add_bad_pomodoro(self):
+        today = datetime.now().strftime("%Y-%m-%d")
+        key = f"{self.BAD_PREFIX}{today}"
+        self.data[key] = self.data.get(key, 0) + 1
+        self._save()
+
     def get_today(self) -> int:
         today = datetime.now().strftime("%Y-%m-%d")
         return self.data.get(today, 0)
 
+    def get_bad_today(self) -> int:
+        today = datetime.now().strftime("%Y-%m-%d")
+        return self.data.get(f"{self.BAD_PREFIX}{today}", 0)
+
     def get_summary(self) -> str:
         today = datetime.now().strftime("%Y-%m-%d")
-        today_count = self.data.get(today, 0)
-        total = sum(self.data.values())
-        return f"今日完成: {today_count} 个番茄\n累计完成: {total} 个番茄"
+        today_good = self.data.get(today, 0)
+        today_bad = self.data.get(f"{self.BAD_PREFIX}{today}", 0)
+        total_good = sum(v for k, v in self.data.items()
+                         if not k.startswith(self.BAD_PREFIX))
+        total_bad = sum(v for k, v in self.data.items()
+                        if k.startswith(self.BAD_PREFIX))
+        return (f"今日完成: {today_good}  今日中断: {today_bad}\n"
+                f"累计完成: {total_good}  累计中断: {total_bad}")
 
     def get_recent(self, days: int = 7) -> list[tuple[str, int]]:
-        return sorted(self.data.items(), reverse=True)[:days]
+        good = {k: v for k, v in self.data.items()
+                if not k.startswith(self.BAD_PREFIX)}
+        return sorted(good.items(), reverse=True)[:days]
 
 
 # ==================== 通知窗口 ====================
 
 class Notification:
-    """自定义弹出通知，3秒自动关闭"""
+    """自定义弹出通知，从屏幕上方居中滑入，3秒自动关闭"""
 
-    DURATION = 3000
-    WIDTH, HEIGHT = 280, 60
+    DURATION = 5000
+    WIDTH, HEIGHT = 320, 80
+    TARGET_TOP = 24
+    SLIDE_STEP = 10
+    SLIDE_INTERVAL = 16
+    CORNER_RADIUS = 10
+    TITLE_Y = 22
+    MESSAGE_Y = 50
+    MESSAGE_WIDTH = 205
 
     def __init__(self, parent: tk.Tk, message: str, color: str):
         self.win = tk.Toplevel(parent)
@@ -108,28 +134,79 @@ class Notification:
         self.win.attributes("-alpha", 0.92)
 
         screen_w = self.win.winfo_screenwidth()
-        screen_h = self.win.winfo_screenheight()
-        x = screen_w - self.WIDTH - 30
-        y = screen_h - self.HEIGHT - 80
-        self.win.geometry(f"{self.WIDTH}x{self.HEIGHT}+{x}+{y}")
+        self._x = (screen_w - self.WIDTH) // 2
+        y = -self.HEIGHT
+        self.win.geometry(f"{self.WIDTH}x{self.HEIGHT}+{self._x}+{y}")
 
         canvas = tk.Canvas(self.win, width=self.WIDTH, height=self.HEIGHT,
                            bg="#18272F", highlightthickness=0)
         canvas.pack()
 
-        canvas.create_rectangle(0, 0, 6, self.HEIGHT, fill=color, outline="")
-        canvas.create_text(28, self.HEIGHT // 2, text="\U0001f345",
-                           font=("Segoe UI Emoji", 14))
-        canvas.create_text(50, self.HEIGHT // 2, text=message, anchor="w",
-                           font=("Microsoft YaHei UI", 10), fill="#FFFFFF")
+        _draw_rounded_rect(canvas, 1, 1, self.WIDTH - 1, self.HEIGHT - 1,
+                           self.CORNER_RADIUS,
+                           fill="#18272F", outline="#3A3A5C", width=1)
 
+        canvas.create_rectangle(0, 1, 6, self.HEIGHT - 1,
+                                fill=color, outline="")
+
+        canvas.create_text(self.WIDTH // 2, self.TITLE_Y,
+                           text="番茄钟提醒",
+                           font=("Microsoft YaHei UI", 12, "bold"),
+                           fill="#B0B0B0")
+
+        canvas.create_text(self.WIDTH // 2, self.MESSAGE_Y,
+                           text=message,
+                           width=self.MESSAGE_WIDTH,
+                           justify="center",
+                           font=("Microsoft YaHei UI", 12),
+                           fill="#FFFFFF")
+
+        self._closing = False
+        canvas.bind("<Button-1>", self._close)
+
+        self._slide_down()
         self.win.after(self.DURATION, self._close)
 
-    def _close(self):
+    def _slide_down(self):
+        def move(y_pos: int):
+            try:
+                if self._closing:
+                    return
+                if y_pos < self.TARGET_TOP:
+                    y_pos = min(y_pos + self.SLIDE_STEP, self.TARGET_TOP)
+                    self.win.geometry(f"{self.WIDTH}x{self.HEIGHT}+{self._x}+{y_pos}")
+                    self.win.after(self.SLIDE_INTERVAL, lambda: move(y_pos))
+            except tk.TclError:
+                pass
+
+        move(-self.HEIGHT)
+
+    def _slide_up(self):
+        def move(y_pos: int, alpha: float):
+            try:
+                if y_pos > -self.HEIGHT or alpha > 0:
+                    y_pos = max(-self.HEIGHT, y_pos - self.SLIDE_STEP)
+                    alpha = max(0, alpha - 0.06)
+                    self.win.geometry(f"{self.WIDTH}x{self.HEIGHT}+{self._x}+{y_pos}")
+                    self.win.attributes("-alpha", alpha)
+                    self.win.after(self.SLIDE_INTERVAL, lambda: move(y_pos, alpha))
+                else:
+                    self.win.destroy()
+            except tk.TclError:
+                pass
+
         try:
-            self.win.destroy()
+            cur_y = self.win.winfo_y()
+            cur_alpha = float(self.win.attributes("-alpha"))
+            move(cur_y, cur_alpha)
         except tk.TclError:
             pass
+
+    def _close(self):
+        if self._closing:
+            return
+        self._closing = True
+        self._slide_up()
 
 
 # ==================== 工具函数 ====================
@@ -397,6 +474,8 @@ class TomatoApp:
         self.running = False
 
     def _reset(self):
+        if self.state == TimerState.WORK:
+            self.stats.add_bad_pomodoro()
         self.running = False
         self.state = TimerState.IDLE
         self.remaining = 0
@@ -407,7 +486,26 @@ class TomatoApp:
         if self.state == TimerState.IDLE:
             return
         self.running = False
-        self._on_phase_end()
+        if self.state == TimerState.WORK:
+            self.stats.add_bad_pomodoro()
+            if self.pomodoro_count % 4 == 0:
+                self.state = TimerState.LONG_BREAK
+            else:
+                self.state = TimerState.SHORT_BREAK
+            if self.notification_enabled:
+                Notification(self.root,
+                             STATE_CONFIG[self.state]["notify_msg"],
+                             STATE_CONFIG[self.state]["color"])
+        else:
+            self._on_phase_end()
+            return
+        self.remaining = STATE_CONFIG[self.state]["duration"]
+        self._update_display()
+        if self._timer_id:
+            self.root.after_cancel(self._timer_id)
+        if self.auto_mode:
+            self.running = True
+            self._timer_id = self.root.after(1000, self._tick)
 
     def _toggle_notification(self):
         self.notification_enabled = not self.notification_enabled
@@ -482,50 +580,45 @@ class TomatoApp:
     def _show_stats_window(self):
         win = tk.Toplevel(self.root)
         win.title("番茄统计")
-        win.geometry("320x300")
+        win.geometry("260x260")
         win.resizable(False, False)
         win.attributes("-topmost", True)
 
-        x = self.root.winfo_x() + (self.WIDTH - 320) // 2
-        y = self.root.winfo_y() + (self.HEIGHT - 300) // 2
+        sw = win.winfo_screenwidth()
+        sh = win.winfo_screenheight()
+        x = (sw - 260) // 2
+        y = (sh - 260) // 2
         win.geometry(f"+{x}+{y}")
 
         win.configure(bg="#18272F")
 
         tk.Label(win, text="\U0001f4ca 番茄统计",
-                 font=("Microsoft YaHei UI", 15, "bold"),
-                 bg="#18272F", fg="#FFFFFF").pack(pady=(18, 5))
+                 font=("Microsoft YaHei UI", 14, "bold"),
+                 bg="#18272F", fg="#FFFFFF").pack(pady=(14, 4))
 
-        tk.Frame(win, height=1, bg="#333355").pack(fill="x", padx=30, pady=5)
+        tk.Frame(win, height=1, bg="#333355").pack(fill="x", padx=25, pady=4)
 
         summary = self.stats.get_summary()
         tk.Label(win, text=summary,
-                 font=("Microsoft YaHei UI", 11),
-                 bg="#18272F", fg="#E0E0E0", justify="center").pack(pady=8)
+                 font=("Microsoft YaHei UI", 10),
+                 bg="#18272F", fg="#E0E0E0", justify="center").pack(pady=6)
 
-        tk.Frame(win, height=1, bg="#333355").pack(fill="x", padx=30, pady=5)
+        tk.Frame(win, height=1, bg="#333355").pack(fill="x", padx=25, pady=4)
 
-        recent = self.stats.get_recent()
+        recent = self.stats.get_recent(4)
         if recent:
-            tk.Label(win, text="最近记录:",
+            tk.Label(win, text="最近完成:",
                      font=("Microsoft YaHei UI", 10),
-                     bg="#18272F", fg="#888888").pack(pady=(5, 2))
+                     bg="#18272F", fg="#888888").pack(pady=(3, 1))
             for date, count in recent:
                 tk.Label(win, text=f"  {date}    {count} 个番茄",
                          font=("Consolas", 10),
                          bg="#18272F", fg="#AAAAAA").pack()
         else:
-            tk.Label(win, text="暂无记录，开始你的第一个番茄吧！",
+            tk.Label(win, text="暂无记录",
                      font=("Microsoft YaHei UI", 10),
-                     bg="#18272F", fg="#666666").pack(pady=10)
-
-        btn_frame = tk.Frame(win, bg="#18272F")
-        btn_frame.pack(pady=15)
-        tk.Button(btn_frame, text="关闭", command=win.destroy,
-                  bg="#FF6B35", fg="#FFFFFF", relief="flat",
-                  font=("Microsoft YaHei UI", 10), padx=25, pady=3,
-                  activebackground="#E55A2B", activeforeground="#FFFFFF",
-                  cursor="hand2").pack()
+                     bg="#18272F", fg="#666666").pack(pady=6)
+        tk.Frame(win, height=14, bg="#18272F").pack()
 
     def run(self):
         self.root.mainloop()
