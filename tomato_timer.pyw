@@ -456,6 +456,8 @@ class TomatoApp:
     # ---- 控制方法 ----
 
     def _start(self):
+        if self.running:
+            return
         if self.state == TimerState.IDLE:
             self.state = TimerState.WORK
             self.remaining = STATE_CONFIG[TimerState.WORK]["duration"]
